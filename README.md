@@ -53,5 +53,10 @@ Before you begin, ensure you have met the following requirements:
 
 6. **Navigate to** https://localhost:7229/
 
+### Tests
+**To run the tests excute the command from the root of the solution**
+   ```sh
+   dotnet test
+   ```
 ## LICENSE
 This project is licensed under the MIT License - see the LICENSE file for details.
