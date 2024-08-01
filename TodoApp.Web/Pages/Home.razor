@@ -1,0 +1,150 @@
+﻿@page "/"
+
+@using TodoApp.Web.ApiModels
+@using TodoApp.Web.ApiServices.Interfaces
+@using TodoApp.Web.Components
+
+@inject ITodoService TodoService;
+
+<ErrorValidator @ref="_errorValidator" />
+
+<PageTitle>Home</PageTitle>
+
+@if (Todos == null)
+{
+    <Spinner />
+}
+else
+{
+    <RadzenTemplateForm TItem="TodoCreateDto" Data="@model" Submit=@OnCreateTodo>
+        <RadzenRow AlignItems="AlignItems.Center" Style="margin:2rem">
+            <RadzenColumn SizeMD="6" OffsetMD="3">
+
+                <RadzenStack Orientation="Orientation.Horizontal" Style="margin-bottom:1rem">
+                    <RadzenTextBox @bind-Value=@model.Title MaxLength="100" Placeholder="Add some To-Do!" Name="Title" Style="width: 100%;" />
+                    <RadzenRequiredValidator Component="Title" Text="The title is mandatory" />
+                </RadzenStack>
+
+                <RadzenStack Orientation="Orientation.Horizontal" Style="margin-bottom:1rem">
+                    <RadzenTextBox @bind-Value=@model.Description MaxLength="200" Placeholder="Add the description (optional)" Style="width: 100%;" />
+                    <RadzenButton ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Primary" Icon="add"></RadzenButton>
+                </RadzenStack>
+
+                <RadzenSelectBar @bind-Value=@filterValue TValue="int" Multiple="false">
+                    <Items>
+                        <RadzenSelectBarItem Text="All" Value="1" />
+                        <RadzenSelectBarItem Text="Completed" Value="2" />
+                        <RadzenSelectBarItem Text="Pending" Value="3" />
+                    </Items>
+                </RadzenSelectBar>
+
+            </RadzenColumn>
+        </RadzenRow>
+    </RadzenTemplateForm>
+
+    foreach (var todo in FilteredTodos())
+    {
+        <RadzenRow Style="margin:2rem">
+            <RadzenColumn SizeMD="6" OffsetMD="3">
+
+                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center">
+                    <RadzenSwitch @bind-Value=@todo.IsComplete Change=@(args => OnStatusChange(args, todo.Id)) Style="margin-top: 0.8rem;" />
+                    <RadzenFormField Variant="Variant.Text" Style="width: 100%;">
+                        <RadzenTextBox @bind-Value="@todo.Title" Change=@(args => OnChange(args, todo)) Style="width: 100%;" />
+                    </RadzenFormField>
+                </RadzenStack>
+
+                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Style="margin-left: 3.2rem;">
+                    <RadzenFormField Variant="Variant.Text" Style="width: 100%;">
+                        <RadzenTextBox @bind-Value="@todo.Description" Change=@(args => OnChange(args, todo)) Placeholder="Description" Style="width: 100%;" />
+                    </RadzenFormField>
+                    <RadzenButton ButtonStyle="ButtonStyle.Danger" Icon="Delete" Click="@(() => Delete(todo.Id))" @onclick:stopPropagation="true"></RadzenButton>
+                </RadzenStack>
+
+            </RadzenColumn>
+        </RadzenRow>
+    }
+}
+
+@code {
+    private TodoCreateDto model = new();
+    private List<TodoDto> Todos = default!;
+    private ErrorValidator? _errorValidator;
+    private int filterValue = 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Todos = (await TodoService.GetTodos()).ToList();
+    }
+
+    async Task OnCreateTodo(TodoCreateDto model)
+    {
+        var response = await TodoService.Create(model);
+
+        var success = await _errorValidator!.ValidateAndNotifyAsync(response);
+
+        if (success)
+        {
+            var newTodo = await response.Content.ReadFromJsonAsync<TodoDto>();
+            Todos.Add(newTodo!);
+            ClearCreateModel(model);
+        }
+    }
+
+    async Task OnChange(string? value, TodoDto todo)
+    {
+        var response = await TodoService.Edit(todo.GetEditDto());
+
+        var success = await _errorValidator!.ValidateAndNotifyAsync(response);
+    }
+
+    async Task Delete(Guid id)
+    {
+        var response = await TodoService.Delete(id);
+
+        var success = await _errorValidator!.ValidateAndNotifyAsync(response);
+
+        if (success)
+        {
+            var todo = Todos.First(t => t.Id == id);
+            Todos.Remove(todo);
+        }
+    }
+
+    async Task OnStatusChange(bool? value, Guid id)
+    {
+        var response = await TodoService.SwitchStatus(id);
+
+        var success = await _errorValidator!.ValidateAndNotifyAsync(response);
+
+        if (!success)
+        {
+            var todo = Todos.FirstOrDefault(t => t.Id == id) ?? throw new ApplicationException();
+            todo.IsComplete = !todo.IsComplete;
+        }
+    }
+
+    private List<TodoDto> FilteredTodos()
+    {
+        if (filterValue == 1)
+        {
+            return Todos;
+        }
+        else if (filterValue == 2)
+        {
+            return Todos.Where(t => t.IsComplete).ToList();
+        }
+        else if (filterValue == 3)
+        {
+            return Todos.Where(t => !t.IsComplete).ToList();
+        }
+        return Todos;
+    }
+
+    void ClearCreateModel(TodoCreateDto model)
+    {
+        model.Title = string.Empty;
+        model.Description = string.Empty;
+    }
+}
+

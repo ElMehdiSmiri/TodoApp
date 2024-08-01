@@ -1,0 +1,74 @@
+﻿@using Microsoft.AspNetCore.Components
+@using System.Net
+@using System.Text.Json
+@using TodoApp.Web.Models
+
+@inject NotificationService NotificationService
+
+@code {
+    const int errorDuration = 3000;
+    const int successDuration = 1500;
+
+    public async Task<bool> ValidateAndNotifyAsync(HttpResponseMessage response)
+    {
+        if (response.IsSuccessStatusCode)
+        {
+            NotificationService.Notify(new NotificationMessage
+                {
+                    Severity = NotificationSeverity.Success,
+                    Summary = "The operation was successfully completed.",
+                    Duration = successDuration
+                });
+
+            return true;
+        }
+        else
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            var details = JsonSerializer.Deserialize<ProblemDetails>(body);
+
+            if (details is null)
+            {
+                NotificationService.Notify(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = "Unknown error", Duration = errorDuration });
+                return false;
+            }
+
+
+            switch (response.StatusCode)
+            {
+                case HttpStatusCode.BadRequest:
+                    if (details.Errors.Any())
+                    {
+                        foreach (var error in details.Errors)
+                        {
+                            foreach (var errorValue in error.Value)
+                                NotificationService.Notify(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = errorValue, Duration = errorDuration });
+                        }
+                    }
+                    else
+                    {
+                        NotificationService.Notify(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = "Bad request", Duration = errorDuration });
+                    }
+                    break;
+
+                case HttpStatusCode.Forbidden:
+                    NotificationService.Notify(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = "You are not authorized", Duration = errorDuration });
+                    break;
+
+                case HttpStatusCode.Unauthorized:
+                    NotificationService.Notify(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = "You are not authenticated", Duration = errorDuration });
+                    break;
+
+                case HttpStatusCode.NotFound:
+                    NotificationService.Notify(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = "The specified resource was not found", Duration = errorDuration });
+                    break;
+
+                default:
+                    NotificationService.Notify(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = details.Title, Duration = errorDuration });
+                    break;
+            }
+
+            return false;
+        }
+    }
+}
